@@ -5,6 +5,7 @@ import matplotlib.pyplot, pandas, re, requests
 # 2. obter_converter_dados
 # 3. converter_telefone
 # 4. gerar_relatorio_grafico
+# 5. agrupar_local
 
 def obter_dados(n):
 	# Efetuar requisição da API.
@@ -71,6 +72,10 @@ def gerar_relatorio_grafico(frame):
 	# Salvar gráfico em arquivo.
 	matplotlib.pyplot.savefig('idades.png')
 
+def agrupar_local(frame):
+	# Retornar DataFrame ordenado por país e depois estado.
+	return frame.sort_values(['location.country', 'location.state'])
+
 def main():
 	# Obter e converter dados da API para 1000 usuários.
 	frame = obter_converter_dados(1000)
@@ -82,6 +87,9 @@ def main():
 
 	# Gerar relatório e gráfico.
 	gerar_relatorio_grafico(frame)
+
+	# Agrupar por país e estado.
+	frame = agrupar_local(frame)
 
 	print(frame)
 
