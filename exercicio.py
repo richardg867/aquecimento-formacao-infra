@@ -1,8 +1,9 @@
-import pandas, requests
+import pandas, re, requests
 
 # Etapas cumpridas:
 # 1. obter_dados
 # 2. obter_converter_dados
+# 3. converter_telefone
 
 def obter_dados(n):
 	# Efetuar requisição da API.
@@ -36,12 +37,26 @@ def obter_converter_dados(n):
 
 	return frame
 
+def converter_telefone(frame_in):
+	# Copiar DataFrame de entrada.
+	frame_out = frame_in.copy()
+
+	# Transformar números de telefone e celular.
+	for nome_series in ('phone', 'cell'):
+		# Transformar série e substituir a existente.
+		# A função lambda retira caracteres adicionais do número e deixa somente os dígitos.
+		frame_out[nome_series] = frame_out[nome_series].transform(lambda tel: re.sub(r'''[^0-9]''', '', tel))
+
+	return frame_out
 
 def main():
 	# Obter e converter dados da API para 1000 usuários.
 	frame = obter_converter_dados(1000)
 	if frame is None:
 		return
+
+	# Converter números de telefone e celular.
+	frame = converter_telefone(frame)
 
 	print(frame)
 
