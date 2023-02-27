@@ -1,9 +1,10 @@
-import pandas, re, requests
+import matplotlib.pyplot, pandas, re, requests
 
 # Etapas cumpridas:
 # 1. obter_dados
 # 2. obter_converter_dados
 # 3. converter_telefone
+# 4. gerar_relatorio_grafico
 
 def obter_dados(n):
 	# Efetuar requisição da API.
@@ -49,6 +50,27 @@ def converter_telefone(frame_in):
 
 	return frame_out
 
+def gerar_relatorio_grafico(frame):
+	# Iniciar relatório em texto.
+	f = open('relatorio.txt', 'w')
+
+	# Adicionar gêneros e países ao relatório.
+	for tipo, series in (('Gêneros', 'gender'), ('País', 'location.country')):
+		f.write('{0}:\n'.format(tipo))
+		for value, count in frame[series].value_counts().items():
+			f.write('- {0}: {1:.01f}%\n'.format(value, (count / len(frame[series])) * 100))
+		f.write('\n')
+
+	# Finalizar relatório.
+	f.close()
+
+	# Gerar gráfico de distribuição de idades.
+	matplotlib.pyplot.title('Distribuição de Idades')
+	matplotlib.pyplot.hist(frame['dob.age'], bins=10)
+
+	# Salvar gráfico em arquivo.
+	matplotlib.pyplot.savefig('idades.png')
+
 def main():
 	# Obter e converter dados da API para 1000 usuários.
 	frame = obter_converter_dados(1000)
@@ -57,6 +79,9 @@ def main():
 
 	# Converter números de telefone e celular.
 	frame = converter_telefone(frame)
+
+	# Gerar relatório e gráfico.
+	gerar_relatorio_grafico(frame)
 
 	print(frame)
 
