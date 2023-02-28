@@ -1,16 +1,19 @@
-import matplotlib.pyplot, os, pandas, re, requests
+import getopt, matplotlib.pyplot, os, pandas, re, requests, sys
 
 # Etapas cumpridas:
 # 1. obter_dados
 # 2. obter_converter_dados
 # 3. converter_telefone
 # 4. gerar_relatorio_grafico
-# 5. agrupar_local
+# 5. agrupar
 # 6. particionar_dados
+# 7. main
 
 def obter_dados(n):
+	print('Obtendo dados...')
+
 	# Efetuar requisição da API.
-	response = requests.get('https://randomuser.me/api/?results={0}'.format(n))
+	response = requests.get(f'https://randomuser.me/api/?results={n}')
 	if response.status_code != 200:
 		print('API retornou status', response.status_code)
 		return None
@@ -29,6 +32,8 @@ def obter_converter_dados(n):
 	if not dados or 'results' not in dados:
 		return None
 
+	print('Convertendo dados...')
+
 	# Normalizar dados para torná-los planos.
 	normalizado = pandas.json_normalize(dados['results'])
 
@@ -41,6 +46,8 @@ def obter_converter_dados(n):
 	return frame
 
 def converter_telefone(frame_in):
+	print('Convertendo telefones...')
+
 	# Copiar DataFrame de entrada.
 	frame_out = frame_in.copy()
 
@@ -52,45 +59,53 @@ def converter_telefone(frame_in):
 
 	return frame_out
 
-def gerar_relatorio_grafico(frame):
-	# Iniciar relatório em texto.
-	f = open('relatorio.txt', 'w')
+def gerar_relatorio_grafico(frame, report, idades):
+	if report:
+		print('Criando relatório...')
 
-	# Adicionar gêneros e países ao relatório.
-	for tipo, series in [('Gêneros', 'gender'), ('País', 'location.country')]:
-		f.write('{0}:\n'.format(tipo))
-		for value, count in frame[series].value_counts().items():
-			f.write('- {0}: {1:.01f}%\n'.format(value, (count / len(frame[series])) * 100))
-		f.write('\n')
+		# Iniciar relatório em texto.
+		f = open('relatorio.txt', 'w')
 
-	# Finalizar relatório.
-	f.close()
+		# Adicionar parâmetros definidos ao relatório.
+		for series in report:
+			f.write('{0}:\n'.format(series))
+			for value, count in frame[series].value_counts().items():
+				f.write('- {0}: {1:.01f}%\n'.format(value, (count / len(frame[series])) * 100))
+			f.write('\n')
 
-	# Gerar gráfico de distribuição de idades.
-	matplotlib.pyplot.title('Distribuição de Idades')
-	matplotlib.pyplot.hist(frame['dob.age'], bins=10)
+		# Finalizar relatório.
+		f.close()
 
-	# Salvar gráfico em arquivo.
-	matplotlib.pyplot.savefig('idades.png')
+	if idades:
+		print('Criando gráfico...')
 
-def agrupar_local(frame):
-	# Retornar DataFrame ordenado por país e depois estado.
-	return frame.sort_values(['location.country', 'location.state'])
+		# Gerar gráfico de distribuição de idades.
+		matplotlib.pyplot.title('Distribuição de Idades')
+		matplotlib.pyplot.hist(frame['dob.age'], bins=idades)
 
-def particionar_rec(frame, series, pasta):
-	for value in frame.groupby().items:
-		# Criar pasta referente a partição se necessário.
-		pasta_valor = os.path.join(pasta, '{0}={1}'.format(series, value))
-		if not os.path.isdir(pasta_valor):
-			os.makedirs(pasta_valor)
+		# Salvar gráfico em arquivo.
+		matplotlib.pyplot.savefig('idades.png')
 
-		frame_filter = frame[frame[series] == value]
-		frame_filter.to_csv(os.path.join(pasta_valor, 'data.csv'))
+def agrupar(frame, series):
+	print('Agrupando dados...')
 
-def particionar_dados(frame):
+	# Ordenar DataFrame pelos parâmetros definidos.
+	frame = frame.sort_values(series)
+
+	# Salvar novos dados em CSV.
+	frame.to_csv('dados.csv')
+
+	return frame
+
+def particionar_dados(frame, series):
+	print('Particionando dados...')
+
 	# Efetuar particionamento por séries.
-	series = ['location.country', 'location.state']
 	for group in frame.groupby(series).groups:
+		# Converter valor para tuple de 1 elemento se somente uma série for particionada.
+		if type(group) != tuple:
+			group = (group,)
+
 		# Criar DataFrame particionado série por série, montando o caminho da pasta.
 		frame_part = frame
 		caminho = 'partitions'
@@ -99,7 +114,7 @@ def particionar_dados(frame):
 			frame_part = frame_part[frame_part[series[i]] == group[i]]
 
 			# Adicionar partição ao caminho.
-			caminho = os.path.join(caminho, '{0}={1}'.format(series[i], group[i]))
+			caminho = os.path.join(caminho, f'{series[i]}={group[i]}')
 
 		# Criar pasta para este conjunto de partições caso necessário.
 		if not os.path.isdir(caminho):
@@ -110,23 +125,69 @@ def particionar_dados(frame):
 		frame_part.to_csv(caminho)
 
 def main():
+	# Definir valores padrão para os parâmetros.
+	age = 0
+	group = ['location.country', 'location.state']
+	number = 1000
+	partition = ['location.country', 'location.state']
+	phone_number = False
+	report = ['gender', 'location.country']
+
+	# Interpretar parâmetros.
+	parametros, resto = getopt.getopt(sys.argv[1:], 'a:g:hn:p:r:t', ['age', 'group', 'help', 'number', 'partition', 'report', 'phone-number'])
+	for parametro, valor in parametros:
+		if parametro in ('-a', '--age'):
+			age = int(valor)
+		elif parametro in ('-g', '--group'):
+			group = valor.split(',')
+		elif parametro in ('-h', '--help'):
+			# Mostrar ajuda.
+
+			print(f'''
+Uso: exercicio.py [-a grupos] [-g] [-h] [-n numero] [-p series] [-r series] [-t]
+
+-a / --age           Gerar gráfico de distribuição de idades por quantidade grupos
+-g / --group         Colunas para agrupamento (padrão: {','.join(group)})
+-h / --help          Este texto de ajuda
+-n / --number        Quantidade de usuários a obter (padrão: {number})
+-p / --partition     Colunas para particionamento (padrão: {','.join(partition)})
+-r / --report        Gerar relatórios (padrão: {','.join(report)})
+-t / --phone-number  Converter números de telefone e celular para padrão único
+''')
+
+			# Sair sem executar nenhuma tarefa.
+			return
+		elif parametro in ('-n', '--number'):
+			number = int(valor)
+		elif parametro in ('-p', '--partition'):
+			partition = valor.split(',')
+		elif parametro in ('-r', '--report'):
+			report = valor.split(',')
+		elif parametro in ('-t', '--phone-number'):
+			phone_number = True
+
 	# Obter e converter dados da API para 1000 usuários.
-	frame = obter_converter_dados(1000)
+	frame = obter_converter_dados(number)
 	if frame is None:
 		return
 
 	# Converter números de telefone e celular.
-	frame = converter_telefone(frame)
+	if phone_number:
+		frame = converter_telefone(frame)
 
 	# Gerar relatório e gráfico.
-	gerar_relatorio_grafico(frame)
+	if report or age:
+		gerar_relatorio_grafico(frame, report, age)
 
 	# Agrupar por país e estado.
-	frame = agrupar_local(frame)
+	if group:
+		frame = agrupar(frame, group)
 
 	# Particionar dados.
-	particionar_dados(frame)
+	if partition:
+		particionar_dados(frame, partition)
 
+	print('Concluído. DataFrame final:')
 	print(frame)
 
 if __name__ == '__main__':
