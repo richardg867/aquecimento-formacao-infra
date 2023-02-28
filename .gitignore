@@ -1,0 +1,9 @@
+# Python
+__pycache__/
+*.pyc
+
+# Dados
+partitions/
+dados.csv
+idades.png
+relatorio.txt
