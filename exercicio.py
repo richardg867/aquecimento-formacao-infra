@@ -1,4 +1,4 @@
-import matplotlib.pyplot, pandas, re, requests
+import matplotlib.pyplot, os, pandas, re, requests
 
 # Etapas cumpridas:
 # 1. obter_dados
@@ -6,6 +6,7 @@ import matplotlib.pyplot, pandas, re, requests
 # 3. converter_telefone
 # 4. gerar_relatorio_grafico
 # 5. agrupar_local
+# 6. particionar_dados
 
 def obter_dados(n):
 	# Efetuar requisição da API.
@@ -56,7 +57,7 @@ def gerar_relatorio_grafico(frame):
 	f = open('relatorio.txt', 'w')
 
 	# Adicionar gêneros e países ao relatório.
-	for tipo, series in (('Gêneros', 'gender'), ('País', 'location.country')):
+	for tipo, series in [('Gêneros', 'gender'), ('País', 'location.country')]:
 		f.write('{0}:\n'.format(tipo))
 		for value, count in frame[series].value_counts().items():
 			f.write('- {0}: {1:.01f}%\n'.format(value, (count / len(frame[series])) * 100))
@@ -76,6 +77,38 @@ def agrupar_local(frame):
 	# Retornar DataFrame ordenado por país e depois estado.
 	return frame.sort_values(['location.country', 'location.state'])
 
+def particionar_rec(frame, series, pasta):
+	for value in frame.groupby().items:
+		# Criar pasta referente a partição se necessário.
+		pasta_valor = os.path.join(pasta, '{0}={1}'.format(series, value))
+		if not os.path.isdir(pasta_valor):
+			os.makedirs(pasta_valor)
+
+		frame_filter = frame[frame[series] == value]
+		frame_filter.to_csv(os.path.join(pasta_valor, 'data.csv'))
+
+def particionar_dados(frame):
+	# Efetuar particionamento por séries.
+	series = ['location.country', 'location.state']
+	for group in frame.groupby(series).groups:
+		# Criar DataFrame particionado série por série, montando o caminho da pasta.
+		frame_part = frame
+		caminho = 'partitions'
+		for i in range(len(group)):
+			# Filtrar DataFrame por valor desta série.
+			frame_part = frame_part[frame_part[series[i]] == group[i]]
+
+			# Adicionar partição ao caminho.
+			caminho = os.path.join(caminho, '{0}={1}'.format(series[i], group[i]))
+
+		# Criar pasta para este conjunto de partições caso necessário.
+		if not os.path.isdir(caminho):
+			os.makedirs(caminho)
+
+		# Salvar arquivo particionado.
+		caminho = os.path.join(caminho, 'data.csv')
+		frame_part.to_csv(caminho)
+
 def main():
 	# Obter e converter dados da API para 1000 usuários.
 	frame = obter_converter_dados(1000)
@@ -90,6 +123,9 @@ def main():
 
 	# Agrupar por país e estado.
 	frame = agrupar_local(frame)
+
+	# Particionar dados.
+	particionar_dados(frame)
 
 	print(frame)
 
